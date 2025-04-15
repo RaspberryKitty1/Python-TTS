@@ -1,147 +1,159 @@
-# Python TTS Reader Script
+# 🗣️ Python TTS Reader Script
 
-This script reads text aloud using text-to-speech (TTS) with progress tracking. You can either input text manually, read from a file, or use clipboard content. The script supports voice selection and adjustable speech rate, with an option to show word count progress while reading.
+A flexible, interactive script that reads text aloud using Text-to-Speech (TTS) with optional progress tracking. You can input text manually, load from a file, or grab clipboard content—customizable voices and speech rate included.
 
-## Features
+---
 
-- **Text Input Options**:
-  - Manually enter text.
-  - Read from a file.
-  - Use the clipboard content.
-  
-- **Voice and Rate Customization**:
-  - Select different voices (default is the first available voice).
-  - Adjust speech rate for faster/slower reading.
+## ✨ Features
 
-- **Word Progress Indicator**:
-  - Option to display word count progress while reading the text.
+- **Multiple Input Options**  
+  - Enter text manually  
+  - Load from a file  
+  - Use clipboard content  
 
-- **Structured Text Handling**:
-  - The script detects headings and paragraphs to improve speech flow.
+- **Voice & Rate Customization**  
+  - Choose from available system voices  
+  - Adjust the speech rate (default: 150 WPM)
 
-## Requirements
+- **Progress Indicator**  
+  - Option to display real-time word count while reading
+
+- **Smart Text Structuring**  
+  - Detects headings and paragraphs for natural speech flow
+
+---
+
+## 📦 Requirements
 
 - Python 3.x
-- `pyttsx3` (Text-to-Speech library)
-- `pyperclip` (for clipboard access)
+- [`pyttsx3`](https://pypi.org/project/pyttsx3/) – Offline TTS engine  
+- [`pyperclip`](https://pypi.org/project/pyperclip/) – Clipboard access  
 
-## Installation
+Install both via `pip install -r requirements.txt`.
 
-### Step 1: Set up a Virtual Environment
+---
 
-It's recommended to use a **virtual environment** to avoid conflicts with your system's Python packages. Here's how to set it up:
+## ⚙️ Installation
 
-1. **Create a virtual environment**:
+### 1. Set Up a Virtual Environment (Recommended)
 
-   ```bash
-   python -m venv venv
-   ```
+```bash
+python -m venv venv
+```
 
-2. **Activate the virtual environment**:
+Activate it:
 
-   - On **Windows**:
+- **Windows**:  
 
-     ```bash
-     .\venv\Scripts\activate
-     ```
+  ```bash
+  .\venv\Scripts\activate
+  ```
 
-   - On **Linux/macOS**:
+- **macOS/Linux**:  
 
-     ```bash
-     source venv/bin/activate
-     ```
+  ```bash
+  source venv/bin/activate
+  ```
 
-### Step 2: Install Dependencies
-
-With the virtual environment activated, install the required dependencies by running:
+### 2. Install Dependencies
 
 ```bash
 pip install -r requirements.txt
 ```
 
-### Step 3: Run the Script
+---
 
-After installing the dependencies, you can run the script with any of the available arguments.
+## 🚀 Usage
 
-## Usage
+### ▶️ Command Line Options
 
-### Command Line Arguments
+| Argument           | Description                                                  |
+|-------------------|--------------------------------------------------------------|
+| `--text`          | Directly input the text to read                              |
+| `--file`          | Specify a file path to read from                             |
+| `--clipboard`     | Use text from the clipboard                                  |
+| `--word-indicator`| Display word-by-word progress while reading                  |
+| `--rate`          | Set custom speech rate (e.g., 200 for faster, 100 for slower)|
+| `--voice`         | Choose voice by index (default is 0 - the first available)   |
 
-| Argument               | Description                                                 |
-|------------------------|-------------------------------------------------------------|
-| `--text`               | Directly input the text to read.                            |
-| `--file`               | Provide the path to a text file to read from.               |
-| `--clipboard`          | Use text from the clipboard.                                |
-| `--word-indicator`     | Show word count progress while reading the text.            |
-| `--rate`               | Set the speech rate (default is 150).                       |
-| `--voice`              | Choose a voice by index (default is the first available).   |
+---
 
-### Example Commands
+### 💡 Example Commands
 
-#### Reading text directly from command-line
+#### Read direct input
 
 ```bash
-python tts_reader.py --text "Hello, how are you today?"
+python tts_reader.py --text "Hello, world!"
 ```
 
-#### Reading from a file
+#### Read from file
 
 ```bash
 python tts_reader.py --file "example.txt"
 ```
 
-#### Reading from clipboard
+#### Read from clipboard
 
 ```bash
 python tts_reader.py --clipboard
 ```
 
-#### Showing word count progress
+#### Show word-by-word progress
 
 ```bash
 python tts_reader.py --text "This is some text." --word-indicator
 ```
 
-#### Adjusting the speech rate
+#### Adjust speech rate
 
 ```bash
-python tts_reader.py --text "This is some text." --rate 200
+python tts_reader.py --text "Faster speech here." --rate 200
 ```
 
-#### Choosing a voice
+#### Select voice
 
 ```bash
-python tts_reader.py --text "This is some text." --voice 1
+python tts_reader.py --text "Different voice." --voice 1
 ```
 
-## Input via Command Line
+---
 
-When no text, file, or clipboard argument is provided, the script will prompt you to **enter or paste** text. To end input, press `Ctrl+D` (or type `^D` on Windows).
+## 📝 Manual Input (Fallback)
 
-```bash
-Enter/Paste your text below. Finish input with Ctrl+D (or ^D) to finish:
+If no `--text`, `--file`, or `--clipboard` option is used, the script will prompt:
+
+```
+Enter/Paste your text below. Finish input with Ctrl+D (or ^D on Windows):
 ```
 
-After entering the text, the script will start reading it aloud, with word count progress if enabled.
+Once complete, the script begins reading the input aloud.
 
-## Example Output
+---
 
-If using the word indicator:
+## 🔊 Example Output (With Word Indicator)
 
 ```bash
 Starting speech...
-1/5 words: This is some text.
-2/5 words: And this is more.
+1/5 words: This
+2/5 words: is
+3/5 words: some
+4/5 words: test
+5/5 words: text.
 ```
 
-## Deactivating the Virtual Environment
+---
 
-When you're done, you can deactivate the virtual environment with:
+## 🔚 Deactivating the Environment
+
+When done:
 
 ```bash
 deactivate
 ```
 
-## License
+---
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+## 📄 License
+
+This project is licensed under the **MIT License**.  
+See the [LICENSE](LICENSE) file for full details.
