@@ -24,9 +24,9 @@ A flexible, interactive script that reads text aloud using Text-to-Speech (TTS) 
 
 * **Pause / Resume / Quit Controls**
 
-  * `p` to pause
-  * `r` to resume
-  * `q` to stop reading
+  * `p` + Enter → Pause reading
+  * `r` + Enter → resume
+  * `q` + Enter → stop reading
 
 * **Smart Text Structuring**
 
@@ -147,7 +147,7 @@ python tts_reader.py --text "Different voice." --voice 1
 
 If no `--text`, `--file`, or `--clipboard` option is provided, the script will prompt you to paste or type input:
 
-```
+```plaintext
 Enter/Paste your text below. Finish input with Ctrl+D (or ^D on Windows):
 ```
 

@@ -5,16 +5,13 @@ import pyperclip
 import time
 import sys
 import threading
-from langdetect import detect, LangDetectException
+from langdetect import detect, DetectorFactory  # pip install langdetect
 
-# Global control flags
-pause_flag = threading.Event()
-pause_flag.set()  # Not paused initially
-stop_flag = threading.Event()
+DetectorFactory.seed = 0  # Consistent language detection
 
 def clean_text(text):
-    text = re.sub(r'<.*?>', '', text)  # Remove HTML-style tags
-    text = re.sub(r'https?://\S+|www\.\S+', '', text)  # Remove URLs
+    text = re.sub(r'<.*?>', '', text)
+    text = re.sub(r'https?://\S+|www\.\S+', '', text)
     return text.strip()
 
 def split_into_sentences(text):
@@ -35,110 +32,108 @@ def handle_structured_text(text):
 
 def detect_language(text):
     try:
-        return detect(text)
-    except LangDetectException:
+        lang = detect(text)
+        print(f"[Language Detected]: {lang}")
+        return lang
+    except Exception as e:
+        print(f"[Language Detection Error]: {e}")
         return None
 
-def select_voice_by_language(engine, lang_code):
-    voices = engine.getProperty("voices")
+def find_voice_for_language(lang_code, voices):
     lang_code = lang_code.lower()
-    for i, voice in enumerate(voices):
-        langs = []
-        for l in getattr(voice, 'languages', []):
-            if isinstance(l, bytes):
-                try:
-                    langs.append(l.decode('utf-8').lower())
-                except:
-                    pass
-            else:
-                langs.append(l.lower())
-        if any(lang_code in l for l in langs):
-            return i
-    return 0  # fallback to default
+    for v in voices:
+        voice_langs = getattr(v, 'languages', [])
+        for tag in voice_langs:
+            if isinstance(tag, bytes):
+                tag = tag.decode("utf-8")
+            if lang_code in tag.lower():
+                return v.id
+        if lang_code in v.name.lower() or lang_code in v.id.lower():
+            return v.id
+    return None
+
+def key_listener(pause_flag, stop_flag):
+    print("Controls: type 'p' + Enter to pause, 'r' + Enter to resume, 'q' + Enter to quit.")
+    while not stop_flag.is_set():
+        try:
+            key = input().strip().lower()
+            if key == 'p':
+                if pause_flag.is_set():
+                    pause_flag.clear()
+                    print("[Paused] Type 'r' to resume or 'q' to quit.")
+            elif key == 'r':
+                if not pause_flag.is_set():
+                    pause_flag.set()
+                    print("[Resumed]")
+            elif key == 'q':
+                print("[Quitting early]")
+                stop_flag.set()
+                pause_flag.set()
+        except EOFError:
+            break
 
 def speak_with_progress(text, show_progress=False, rate=150, voice=None):
-    global pause_flag, stop_flag
-
     engine = pyttsx3.init()
     engine.setProperty("rate", rate)
-
     voices = engine.getProperty("voices")
+
+    selected_voice_id = None
     if voice is not None and voice < len(voices):
-        engine.setProperty("voice", voices[voice].id)
+        selected_voice_id = voices[voice].id
+        print(f"[Voice Set by --voice Index: {voice}]")
     else:
-        engine.setProperty("voice", voices[0].id)
+        detected_lang = detect_language(text)
+        matched_voice = find_voice_for_language(detected_lang, voices)
+        if matched_voice:
+            selected_voice_id = matched_voice
+            print(f"[Voice Auto-Selected for Language '{detected_lang}']")
+        else:
+            selected_voice_id = voices[0].id
+            print(f"[No Matching Voice for '{detected_lang}'; using default voice]")
+
+    engine.setProperty("voice", selected_voice_id)
 
     structured_text = handle_structured_text(text)
     total_words = len(text.split())
     spoken_words = 0
 
-    def run_speech():
-        nonlocal spoken_words
+    pause_flag = threading.Event()
+    pause_flag.set()
+    stop_flag = threading.Event()
+
+    key_thread = threading.Thread(target=key_listener, args=(pause_flag, stop_flag), daemon=True)
+    key_thread.start()
+
+    try:
         for section in structured_text:
             if stop_flag.is_set():
                 break
             if "Heading:" in section:
                 time.sleep(0.5)
                 if show_progress:
-                    print(f"Heading: {section.replace('Heading:', '').strip()}\n")
+                    print(f"\n{section.replace('Heading:', '').strip()}\n")
             else:
                 sentences = split_into_sentences(section)
                 for sentence in sentences:
                     if stop_flag.is_set():
                         break
-                    pause_flag.wait()  # Wait if paused
+                    pause_flag.wait()
+                    if stop_flag.is_set():
+                        break
+
                     word_count = len(sentence.split())
                     spoken_words += word_count
                     if show_progress:
                         print(f"{spoken_words}/{total_words} words: {sentence}\n")
+
                     engine.say(sentence)
                     engine.runAndWait()
                     time.sleep(0.1)
-
-    speech_thread = threading.Thread(target=run_speech)
-    speech_thread.start()
-
-    while speech_thread.is_alive():
-        try:
-            import select
-            if sys.platform.startswith('win'):
-                import msvcrt
-                if msvcrt.kbhit():
-                    ch = msvcrt.getwch()
-                    if ch.lower() == 'p':
-                        pause_flag.clear()
-                        print("[Paused]")
-                    elif ch.lower() == 'r':
-                        pause_flag.set()
-                        print("[Resumed]")
-                    elif ch.lower() == 'q':
-                        stop_flag.set()
-                        pause_flag.set()
-                        print("[Stopping]")
-                        break
-            else:
-                dr, _, _ = select.select([sys.stdin], [], [], 0.1)
-                if dr:
-                    ch = sys.stdin.read(1)
-                    if ch.lower() == 'p':
-                        pause_flag.clear()
-                        print("[Paused]")
-                    elif ch.lower() == 'r':
-                        pause_flag.set()
-                        print("[Resumed]")
-                    elif ch.lower() == 'q':
-                        stop_flag.set()
-                        pause_flag.set()
-                        print("[Stopping]")
-                        break
-            time.sleep(0.1)
-        except KeyboardInterrupt:
-            stop_flag.set()
-            pause_flag.set()
-            print("\n[Interrupted]")
-            break
-
-    speech_thread.join()
+    except KeyboardInterrupt:
+        print("\n[Interrupted by user]")
+    finally:
+        stop_flag.set()
+        engine.stop()
 
 def get_text_from_args(args):
     if args.text:
@@ -153,49 +148,31 @@ def get_text_from_args(args):
     elif args.clipboard:
         return pyperclip.paste()
     else:
-        print("Enter/Paste your text below. Finish input with Ctrl+D (or ^D) to finish:")
+        print("Enter/Paste your text below. Finish input with Ctrl+D (Unix) or Ctrl+Z then Enter (Windows):")
         lines = []
         while True:
             try:
                 line = input()
-                if line == "^D":
-                    break
                 lines.append(line)
             except EOFError:
                 break
         return "\n".join(lines)
 
 def main():
-    parser = argparse.ArgumentParser(description="TTS Reader Script with Pause/Resume and Automatic Language Detection")
+    parser = argparse.ArgumentParser(description="TTS Reader with Language Detection, Auto Voice, Pause/Resume, and Word Progress")
     parser.add_argument("--text", help="Text to read")
     parser.add_argument("--file", help="Path to text file")
     parser.add_argument("--clipboard", action="store_true", help="Read text from clipboard")
     parser.add_argument("--word-indicator", action="store_true", help="Show word count progress per sentence")
     parser.add_argument("--rate", type=int, default=150, help="Set the speech rate (default: 150)")
-    parser.add_argument("--voice", type=int, choices=range(0, 20), default=None, help="Choose a voice by index (overrides language detection)")
+    parser.add_argument("--voice", type=int, choices=range(0, 10), default=None, help="Choose voice by index")
 
     args = parser.parse_args()
-
     raw_text = get_text_from_args(args)
     cleaned = clean_text(raw_text)
 
-    if args.voice is not None:
-        chosen_voice = args.voice
-    else:
-        lang = detect_language(cleaned)
-        if lang:
-            print(f"Detected language: {lang}")
-            engine_tmp = pyttsx3.init()
-            chosen_voice = select_voice_by_language(engine_tmp, lang)
-            print(f"Using voice index: {chosen_voice}")
-        else:
-            print("Language detection failed, using default voice.")
-            chosen_voice = 0
-
-    print(f"\nStarting speech...\n")
-    print("Press 'p' to pause, 'r' to resume, 'q' to quit.\n")
-    speak_with_progress(cleaned, show_progress=args.word_indicator, rate=args.rate, voice=chosen_voice)
+    print("\nStarting speech...\n(Type 'p' + Enter to pause, 'r' + Enter to resume, 'q' + Enter to quit)\n")
+    speak_with_progress(cleaned, show_progress=args.word_indicator, rate=args.rate, voice=args.voice)
 
 if __name__ == "__main__":
     main()
-
