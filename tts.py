@@ -135,6 +135,32 @@ def speak_with_progress(text, show_progress=False, rate=150, voice=None):
         stop_flag.set()
         engine.stop()
 
+def speak_to_file(text, rate=150, voice=None, output_path='output.wav'):
+    engine = pyttsx3.init()
+    engine.setProperty("rate", rate)
+    voices = engine.getProperty("voices")
+
+    selected_voice_id = None
+    if voice is not None and voice < len(voices):
+        selected_voice_id = voices[voice].id
+        print(f"[Voice Set by --voice Index: {voice}]")
+    else:
+        detected_lang = detect_language(text)
+        matched_voice = find_voice_for_language(detected_lang, voices)
+        if matched_voice:
+            selected_voice_id = matched_voice
+            print(f"[Voice Auto-Selected for Language '{detected_lang}']")
+        else:
+            selected_voice_id = voices[0].id
+            print(f"[No Matching Voice for '{detected_lang}'; using default voice]")
+
+    engine.setProperty("voice", selected_voice_id)
+
+    print(f"Saving speech to file: {output_path} ...")
+    engine.save_to_file(text, output_path)
+    engine.runAndWait()
+    print("Done!")
+
 def get_text_from_args(args):
     if args.text:
         return args.text
@@ -159,20 +185,24 @@ def get_text_from_args(args):
         return "\n".join(lines)
 
 def main():
-    parser = argparse.ArgumentParser(description="TTS Reader with Language Detection, Auto Voice, Pause/Resume, and Word Progress")
+    parser = argparse.ArgumentParser(description="TTS Reader with Language Detection, Auto Voice, Pause/Resume, Word Progress, and Audio Export")
     parser.add_argument("--text", help="Text to read")
     parser.add_argument("--file", help="Path to text file")
     parser.add_argument("--clipboard", action="store_true", help="Read text from clipboard")
     parser.add_argument("--word-indicator", action="store_true", help="Show word count progress per sentence")
     parser.add_argument("--rate", type=int, default=150, help="Set the speech rate (default: 150)")
     parser.add_argument("--voice", type=int, choices=range(0, 10), default=None, help="Choose voice by index")
+    parser.add_argument("--output", help="Path to save audio output (WAV file)")
 
     args = parser.parse_args()
     raw_text = get_text_from_args(args)
     cleaned = clean_text(raw_text)
 
-    print("\nStarting speech...\n(Type 'p' + Enter to pause, 'r' + Enter to resume, 'q' + Enter to quit)\n")
-    speak_with_progress(cleaned, show_progress=args.word_indicator, rate=args.rate, voice=args.voice)
+    if args.output:
+        speak_to_file(cleaned, rate=args.rate, voice=args.voice, output_path=args.output)
+    else:
+        print("\nStarting speech...\n(Type 'p' + Enter to pause, 'r' + Enter to resume, 'q' + Enter to quit)\n")
+        speak_with_progress(cleaned, show_progress=args.word_indicator, rate=args.rate, voice=args.voice)
 
 if __name__ == "__main__":
     main()

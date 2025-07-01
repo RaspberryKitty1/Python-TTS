@@ -1,6 +1,6 @@
 # 🗣️ Python TTS Reader Script
 
-A flexible, interactive script that reads text aloud using Text-to-Speech (TTS) with progress tracking, automatic language detection, and full keyboard control. Input text from a file, the clipboard, or directly in the terminal.
+A flexible, interactive script that reads text aloud using Text-to-Speech (TTS) with progress tracking, automatic language detection, full keyboard control, and optional audio file export. Input text from a file, the clipboard, or directly in the terminal.
 
 ---
 
@@ -24,9 +24,14 @@ A flexible, interactive script that reads text aloud using Text-to-Speech (TTS) 
 
 * **Pause / Resume / Quit Controls**
 
-  * `p` + Enter → Pause reading
-  * `r` + Enter → resume
-  * `q` + Enter → stop reading
+  * Type `p` + Enter → Pause reading
+  * Type `r` + Enter → Resume reading
+  * Type `q` + Enter → Stop reading
+
+* **Audio File Export**
+
+  * Save the entire input text as a WAV audio file (`--output` option)
+  * Bypasses interactive reading and progress display
 
 * **Smart Text Structuring**
 
@@ -92,14 +97,15 @@ langdetect
 
 ### ▶️ Command Line Options
 
-| Argument           | Description                                                    |
-| ------------------ | -------------------------------------------------------------- |
-| `--text`           | Directly input the text to read                                |
-| `--file`           | Specify a file path to read from                               |
-| `--clipboard`      | Use text from the clipboard                                    |
-| `--word-indicator` | Display word-by-word progress while reading                    |
-| `--rate`           | Set custom speech rate (e.g., 200 for faster, 100 for slower)  |
-| `--voice`          | Choose voice by index (overrides automatic language detection) |
+| Argument           | Description                                                     |
+| ------------------ | --------------------------------------------------------------- |
+| `--text`           | Directly input the text to read                                 |
+| `--file`           | Specify a file path to read from                                |
+| `--clipboard`      | Use text from the clipboard                                     |
+| `--word-indicator` | Display word-by-word progress while reading                     |
+| `--rate`           | Set custom speech rate (e.g., 200 for faster, 100 for slower)   |
+| `--voice`          | Choose voice by index (overrides automatic language detection)  |
+| `--output`         | Path to save audio output as a WAV file (disables live reading and ignores --word-indicator and runtime pause/resume controls) |
 
 ---
 
@@ -141,6 +147,12 @@ python tts_reader.py --text "Faster speech here." --rate 200
 python tts_reader.py --text "Different voice." --voice 1
 ```
 
+#### Export audio to a WAV file
+
+```bash
+python tts_reader.py --file "example.txt" --output speech.wav
+```
+
 ---
 
 ## 📝 Manual Input (Fallback)
@@ -148,22 +160,22 @@ python tts_reader.py --text "Different voice." --voice 1
 If no `--text`, `--file`, or `--clipboard` option is provided, the script will prompt you to paste or type input:
 
 ```plaintext
-Enter/Paste your text below. Finish input with Ctrl+D (or ^D on Windows):
+Enter/Paste your text below. Finish input with Ctrl+D (Unix) or Ctrl+Z then Enter (Windows):
 ```
 
-After submission, the script will begin reading aloud.
+After submission, the script will begin reading aloud or export audio if `--output` is specified.
 
 ---
 
-## 🎛️ Runtime Controls
+## 🎛️ Runtime Controls (Interactive Reading Only)
 
-While the script is speaking, you can interact with it using the keyboard:
+While the script is speaking, you can control it by **typing a command and pressing Enter**:
 
-* `p` → Pause reading
-* `r` → Resume reading
-* `q` → Stop and exit immediately
+* Type `p` + Enter → Pause reading
+* Type `r` + Enter → Resume reading
+* Type `q` + Enter → Stop and exit immediately
 
-These controls work both in the terminal (Unix/Mac) and in the Windows console.
+These controls work in the terminal on Linux, macOS, and Windows without requiring root or admin privileges.
 
 ---
 
