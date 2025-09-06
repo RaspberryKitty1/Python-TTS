@@ -3,206 +3,203 @@ import re
 import argparse
 import pyperclip
 import time
-import sys
 import threading
-from langdetect import detect, DetectorFactory  # pip install langdetect
+import sys
+from langdetect import detect, DetectorFactory
+from tqdm import tqdm
 
-DetectorFactory.seed = 0  # Consistent language detection
+try:
+    from pydub import AudioSegment
+except ImportError:
+    AudioSegment = None
 
-def clean_text(text):
-    text = re.sub(r'<.*?>', '', text)
-    text = re.sub(r'https?://\S+|www\.\S+', '', text)
-    return text.strip()
+try:
+    import keyboard  # pip install keyboard
+    KEYBOARD_AVAILABLE = True
+except ImportError:
+    KEYBOARD_AVAILABLE = False
 
-def split_into_sentences(text):
-    sentences = re.split(r'(?<=[.!?])\s+', text)
-    return [s.strip() for s in sentences if s.strip()]
+DetectorFactory.seed = 0
 
-def handle_structured_text(text):
-    paragraphs = text.split("\n\n")
-    structured_text = []
-    for paragraph in paragraphs:
-        if paragraph.strip() == "":
-            continue
-        if re.match(r'^[A-Z0-9\s]+$', paragraph):
-            structured_text.append(f"Heading: {paragraph}")
-        else:
-            structured_text.append(paragraph)
-    return structured_text
 
-def detect_language(text):
-    try:
-        lang = detect(text)
-        print(f"[Language Detected]: {lang}")
-        return lang
-    except Exception as e:
-        print(f"[Language Detection Error]: {e}")
+class TTSReader:
+    def __init__(self, rate=150, voice=None):
+        self.engine = pyttsx3.init()
+        self.engine.setProperty("rate", rate)
+        self.voices = self.engine.getProperty("voices")
+        self.selected_voice_id = None
+        self.rate = rate
+
+        if voice is not None and voice < len(self.voices):
+            self.selected_voice_id = self.voices[voice].id
+            print(f"[Voice Set by --voice Index: {voice}]")
+
+        self.pause_flag = threading.Event()
+        self.stop_flag = threading.Event()
+        self.pause_flag.set()  # Start unpaused
+
+    @staticmethod
+    def clean_text(text):
+        text = re.sub(r"<.*?>", "", text)
+        text = re.sub(r"https?://\S+|www\.\S+", "", text)
+        return text.strip()
+
+    @staticmethod
+    def split_into_sentences(text):
+        sentences = re.split(r"(?<=[.!?])\s+", text)
+        return [s.strip() for s in sentences if s.strip()]
+
+    def detect_language(self, text):
+        try:
+            lang = detect(text)
+            print(f"[Language Detected]: {lang}")
+            return lang
+        except Exception as e:
+            print(f"[Language Detection Error]: {e}")
+            return None
+
+    def find_voice_for_language(self, lang_code):
+        lang_code = lang_code.lower()
+        for v in self.voices:
+            langs = getattr(v, "languages", [])
+            for tag in langs:
+                if isinstance(tag, bytes):
+                    tag = tag.decode("utf-8")
+                if lang_code in tag.lower():
+                    return v.id
+            if lang_code in v.name.lower() or lang_code in v.id.lower():
+                return v.id
         return None
 
-def find_voice_for_language(lang_code, voices):
-    lang_code = lang_code.lower()
-    for v in voices:
-        voice_langs = getattr(v, 'languages', [])
-        for tag in voice_langs:
-            if isinstance(tag, bytes):
-                tag = tag.decode("utf-8")
-            if lang_code in tag.lower():
-                return v.id
-        if lang_code in v.name.lower() or lang_code in v.id.lower():
-            return v.id
-    return None
+    def select_voice(self, text):
+        if not self.selected_voice_id:
+            lang = self.detect_language(text)
+            matched = self.find_voice_for_language(lang) if lang else None
+            self.selected_voice_id = matched or self.voices[0].id
+            print(f"[Voice Selected]: {self.selected_voice_id}")
 
-def key_listener(pause_flag, stop_flag):
-    print("Controls: type 'p' + Enter to pause, 'r' + Enter to resume, 'q' + Enter to quit.")
-    while not stop_flag.is_set():
-        try:
-            key = input().strip().lower()
-            if key == 'p':
-                if pause_flag.is_set():
-                    pause_flag.clear()
-                    print("[Paused] Type 'r' to resume or 'q' to quit.")
-            elif key == 'r':
-                if not pause_flag.is_set():
-                    pause_flag.set()
-                    print("[Resumed]")
-            elif key == 'q':
-                print("[Quitting early]")
-                stop_flag.set()
-                pause_flag.set()
-        except EOFError:
-            break
+        self.engine.setProperty("voice", self.selected_voice_id)
 
-def speak_with_progress(text, show_progress=False, rate=150, voice=None):
-    engine = pyttsx3.init()
-    engine.setProperty("rate", rate)
-    voices = engine.getProperty("voices")
+    def speak(self, text, show_progress=False, highlight=False):
+        text = self.clean_text(text)
+        self.select_voice(text)
+        sentences = self.split_into_sentences(text)
 
-    selected_voice_id = None
-    if voice is not None and voice < len(voices):
-        selected_voice_id = voices[voice].id
-        print(f"[Voice Set by --voice Index: {voice}]")
-    else:
-        detected_lang = detect_language(text)
-        matched_voice = find_voice_for_language(detected_lang, voices)
-        if matched_voice:
-            selected_voice_id = matched_voice
-            print(f"[Voice Auto-Selected for Language '{detected_lang}']")
-        else:
-            selected_voice_id = voices[0].id
-            print(f"[No Matching Voice for '{detected_lang}'; using default voice]")
+        progress = tqdm(total=len(sentences), unit="sentence", disable=not show_progress)
 
-    engine.setProperty("voice", selected_voice_id)
-
-    structured_text = handle_structured_text(text)
-    total_words = len(text.split())
-    spoken_words = 0
-
-    pause_flag = threading.Event()
-    pause_flag.set()
-    stop_flag = threading.Event()
-
-    key_thread = threading.Thread(target=key_listener, args=(pause_flag, stop_flag), daemon=True)
-    key_thread.start()
-
-    try:
-        for section in structured_text:
-            if stop_flag.is_set():
+        for sentence in sentences:
+            if self.stop_flag.is_set():
                 break
-            if "Heading:" in section:
-                time.sleep(0.5)
-                if show_progress:
-                    print(f"\n{section.replace('Heading:', '').strip()}\n")
-            else:
-                sentences = split_into_sentences(section)
-                for sentence in sentences:
-                    if stop_flag.is_set():
-                        break
-                    pause_flag.wait()
-                    if stop_flag.is_set():
-                        break
+            self.pause_flag.wait()
 
-                    word_count = len(sentence.split())
-                    spoken_words += word_count
-                    if show_progress:
-                        print(f"{spoken_words}/{total_words} words: {sentence}\n")
+            # Show highlighted sentence above progress bar
+            if highlight:
+                tqdm.write(f"> {sentence}")
 
-                    engine.say(sentence)
-                    engine.runAndWait()
-                    time.sleep(0.1)
-    except KeyboardInterrupt:
-        print("\n[Interrupted by user]")
-    finally:
-        stop_flag.set()
-        engine.stop()
+            self.engine.say(sentence)
+            self.engine.runAndWait()
 
-def speak_to_file(text, rate=150, voice=None, output_path='output.wav'):
-    engine = pyttsx3.init()
-    engine.setProperty("rate", rate)
-    voices = engine.getProperty("voices")
+            if show_progress:
+                progress.update(1)
 
-    selected_voice_id = None
-    if voice is not None and voice < len(voices):
-        selected_voice_id = voices[voice].id
-        print(f"[Voice Set by --voice Index: {voice}]")
-    else:
-        detected_lang = detect_language(text)
-        matched_voice = find_voice_for_language(detected_lang, voices)
-        if matched_voice:
-            selected_voice_id = matched_voice
-            print(f"[Voice Auto-Selected for Language '{detected_lang}']")
+            time.sleep(0.05)
+
+        progress.close()
+        self.engine.stop()
+
+    def save_to_file(self, text, path="output.wav", split=False, mp3=False):
+        text = self.clean_text(text)
+        self.select_voice(text)
+
+        if split:
+            sentences = self.split_into_sentences(text)
+            for i, sentence in enumerate(sentences, 1):
+                filename = f"{path.rsplit('.',1)[0]}_{i}.wav"
+                print(f"Saving: {filename}")
+                self.engine.save_to_file(sentence, filename)
+                self.engine.runAndWait()
+                if mp3 and AudioSegment:
+                    sound = AudioSegment.from_wav(filename)
+                    mp3_name = filename.replace(".wav", ".mp3")
+                    sound.export(mp3_name, format="mp3")
         else:
-            selected_voice_id = voices[0].id
-            print(f"[No Matching Voice for '{detected_lang}'; using default voice]")
+            print(f"Saving to {path}...")
+            self.engine.save_to_file(text, path)
+            self.engine.runAndWait()
+            if mp3 and AudioSegment:
+                sound = AudioSegment.from_wav(path)
+                mp3_name = path.replace(".wav", ".mp3")
+                sound.export(mp3_name, format="mp3")
+                print(f"[Converted to MP3: {mp3_name}]")
 
-    engine.setProperty("voice", selected_voice_id)
+        print("[Done]")
 
-    print(f"Saving speech to file: {output_path} ...")
-    engine.save_to_file(text, output_path)
-    engine.runAndWait()
-    print("Done!")
+    def setup_hotkeys(self):
+        if not KEYBOARD_AVAILABLE:
+            print("[Hotkeys Disabled: install `keyboard` library for hotkey support]")
+            return
+
+        def toggle_pause():
+            if self.pause_flag.is_set():
+                self.pause_flag.clear()
+                print("\n[Paused]")
+            else:
+                self.pause_flag.set()
+                print("\n[Resumed]")
+
+        def stop():
+            self.stop_flag.set()
+            self.pause_flag.set()
+            print("\n[Stopped by hotkey]")
+
+        keyboard.add_hotkey("space", toggle_pause)
+        keyboard.add_hotkey("esc", stop)
+
 
 def get_text_from_args(args):
     if args.text:
         return args.text
     elif args.file:
-        try:
-            with open(args.file, 'r', encoding='utf-8') as f:
-                return f.read()
-        except Exception as e:
-            print(f"Failed to read file: {e}")
-            exit(1)
+        with open(args.file, "r", encoding="utf-8") as f:
+            return f.read()
     elif args.clipboard:
         return pyperclip.paste()
     else:
-        print("Enter/Paste your text below. Finish input with Ctrl+D (Unix) or Ctrl+Z then Enter (Windows):")
-        lines = []
-        while True:
-            try:
-                line = input()
-                lines.append(line)
-            except EOFError:
-                break
-        return "\n".join(lines)
+        print("Enter text (Ctrl+D to finish):")
+        return "\n".join(iter(input, ""))
 
 def main():
-    parser = argparse.ArgumentParser(description="TTS Reader with Language Detection, Auto Voice, Pause/Resume, Word Progress, and Audio Export")
+    parser = argparse.ArgumentParser(description="Ultimate TTS Reader")
     parser.add_argument("--text", help="Text to read")
-    parser.add_argument("--file", help="Path to text file")
+    parser.add_argument("--file", help="Read text from file")
     parser.add_argument("--clipboard", action="store_true", help="Read text from clipboard")
-    parser.add_argument("--word-indicator", action="store_true", help="Show word count progress per sentence")
-    parser.add_argument("--rate", type=int, default=150, help="Set the speech rate (default: 150)")
-    parser.add_argument("--voice", type=int, choices=range(0, 10), default=None, help="Choose voice by index")
-    parser.add_argument("--output", help="Path to save audio output (WAV file)")
+    parser.add_argument("--list-voices", action="store_true", help="List available voices and exit")
+    parser.add_argument("--word-indicator", action="store_true", help="Show sentence progress")
+    parser.add_argument("--highlight", action="store_true", help="Highlight current sentence")
+    parser.add_argument("--rate", type=int, default=150, help="Speech rate")
+    parser.add_argument("--voice", type=int, choices=range(0, 50), help="Choose voice index")
+    parser.add_argument("--output", help="Save audio to file (WAV)")
+    parser.add_argument("--split-sentences", action="store_true", help="Save each sentence separately")
+    parser.add_argument("--mp3", action="store_true", help="Convert output to MP3 (requires pydub)")
 
     args = parser.parse_args()
-    raw_text = get_text_from_args(args)
-    cleaned = clean_text(raw_text)
+    reader = TTSReader(rate=args.rate, voice=args.voice)
+
+    if args.list_voices:
+        for i, v in enumerate(reader.voices):
+            langs = [l.decode("utf-8") if isinstance(l, bytes) else l for l in getattr(v, "languages", [])]
+            print(f"[{i}] {v.name} - {langs or 'Unknown'}")
+        return
+
+    text = get_text_from_args(args)
 
     if args.output:
-        speak_to_file(cleaned, rate=args.rate, voice=args.voice, output_path=args.output)
+        reader.save_to_file(text, args.output, split=args.split_sentences, mp3=args.mp3)
     else:
-        print("\nStarting speech...\n(Type 'p' + Enter to pause, 'r' + Enter to resume, 'q' + Enter to quit)\n")
-        speak_with_progress(cleaned, show_progress=args.word_indicator, rate=args.rate, voice=args.voice)
+        print("\nControls: [Space] Pause/Resume, [Esc] Quit\n")
+        reader.setup_hotkeys()
+        reader.speak(text, show_progress=args.word_indicator, highlight=args.highlight)
+
 
 if __name__ == "__main__":
     main()

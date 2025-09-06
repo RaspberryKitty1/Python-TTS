@@ -1,6 +1,6 @@
-# 🗣️ Python TTS Reader Script
+# 🗣️ Python TTS Reader
 
-A flexible, interactive Text-to-Speech (TTS) tool for reading text aloud with smart language detection, voice customization, word-level progress tracking, and optional audio file export. Supports input from files, clipboard, or manual entry—all controlled from the terminal.
+A flexible, interactive Text-to-Speech (TTS) tool for reading text aloud with **automatic language detection**, **voice customization**, **progress tracking**, and optional **audio file export**. Supports input from **files, clipboard, or manual entry**, with real-time **hotkey controls**.
 
 ---
 
@@ -20,23 +20,25 @@ A flexible, interactive Text-to-Speech (TTS) tool for reading text aloud with sm
 
 * **Live Progress Indicator**
 
-  * Displays word-by-word progress during reading (optional)
+  * Sentence-level progress bar (`--word-indicator`)
+  * Optional highlighting of the currently spoken sentence (`--highlight`)
 
 * **Interactive Runtime Controls**
 
-  * Type `p` + Enter → Pause
-  * Type `r` + Enter → Resume
-  * Type `q` + Enter → Quit immediately
+  * `Space` → Pause/Resume
+  * `Esc` → Stop immediately
+  * Works without typing commands
 
 * **Audio File Export**
 
-  * Export speech to a WAV file using `--output`
-  * Non-interactive mode (no progress or controls)
+  * Export speech to WAV (`--output`)
+  * Optionally split sentences (`--split-sentences`)
+  * Optionally export MP3 (`--mp3`) using `pydub` + `ffmpeg`
 
 * **Natural Text Handling**
 
-  * Detects and announces headings
-  * Breaks text into natural-sounding phrases
+  * Detects headings
+  * Breaks text into natural-sounding sentences
 
 ---
 
@@ -46,20 +48,28 @@ A flexible, interactive Text-to-Speech (TTS) tool for reading text aloud with sm
 * [`pyttsx3`](https://pypi.org/project/pyttsx3/) — Offline TTS engine
 * [`pyperclip`](https://pypi.org/project/pyperclip/) — Clipboard access
 * [`langdetect`](https://pypi.org/project/langdetect/) — Language detection
+* [`tqdm`](https://pypi.org/project/tqdm/) — Progress bars
+* [`keyboard`](https://pypi.org/project/keyboard/) — Hotkeys (optional)
+* [`pydub`](https://pypi.org/project/pydub/) — MP3 conversion (optional)
 
-Install with:
+Install all dependencies:
 
 ```bash
 pip install -r requirements.txt
 ```
 
-**`requirements.txt`:**
+**requirements.txt**
 
 ```txt
-pyttsx3
-pyperclip
-langdetect
+pyttsx3>=2.90
+pyperclip>=1.8.2
+langdetect>=1.0.9
+tqdm>=4.64.0
+keyboard>=0.13.5
+pydub>=0.25.1
 ```
+
+**Note:** `pydub` requires **ffmpeg** for MP3 conversion.
 
 ---
 
@@ -75,15 +85,15 @@ Activate it:
 
 * **Windows:**
 
-  ```bash
-  .\venv\Scripts\activate
-  ```
+```bash
+.\venv\Scripts\activate
+```
 
 * **macOS/Linux:**
 
-  ```bash
-  source venv/bin/activate
-  ```
+```bash
+source venv/bin/activate
+```
 
 ### 2. Install Dependencies
 
@@ -97,18 +107,19 @@ pip install -r requirements.txt
 
 ### 🔧 Command-Line Options
 
-| Argument           | Description                                                            |
-| ------------------ | ---------------------------------------------------------------------- |
-| `--text`           | Provide text directly                                                  |
-| `--file`           | Read text from a file                                                  |
-| `--clipboard`      | Use text from the clipboard                                            |
-| `--word-indicator` | Display word-by-word progress while reading                            |
-| `--rate`           | Set speech rate (e.g., 200 = fast, 100 = slow)                         |
-| `--voice`          | Select voice by index (overrides auto-selection)                       |
-| `--output`         | Export spoken audio to a WAV file (disables live reading and progress) |
-
-> **Note:**
-> Audio file export works best on Windows. On Linux, `pyttsx3` may generate output sentence-by-sentence, causing audio to be overwritten unless properly handled.
+| Argument            | Description                                          |
+| ------------------- | ---------------------------------------------------- |
+| `--text`            | Provide text directly                                |
+| `--file`            | Read text from a file                                |
+| `--clipboard`       | Use text from the clipboard                          |
+| `--word-indicator`  | Show sentence-level progress bar                     |
+| `--highlight`       | Highlight the currently spoken sentence              |
+| `--rate`            | Set speech rate (words per minute, e.g., 200 = fast) |
+| `--voice`           | Select voice by index (overrides auto-selection)     |
+| `--output`          | Export spoken audio to WAV file                      |
+| `--split-sentences` | Save each sentence separately                        |
+| `--mp3`             | Convert output to MP3 (requires `pydub` + `ffmpeg`)  |
+| `--list-voices`     | List available voices and exit                       |
 
 ---
 
@@ -132,10 +143,10 @@ python tts_reader.py --file "example.txt"
 python tts_reader.py --clipboard
 ```
 
-#### 🧠 Show word-by-word progress
+#### 🧠 Show progress bar and highlight sentences
 
 ```bash
-python tts_reader.py --text "This is some text." --word-indicator
+python tts_reader.py --file "example.txt" --word-indicator --highlight
 ```
 
 #### ⏩ Adjust speech rate
@@ -150,10 +161,22 @@ python tts_reader.py --text "Faster speech here." --rate 200
 python tts_reader.py --text "Different voice." --voice 1
 ```
 
-#### 💾 Export to audio file
+#### 💾 Export to audio file (WAV)
 
 ```bash
 python tts_reader.py --file "example.txt" --output speech.wav
+```
+
+#### 💾 Export to audio file (MP3) and split sentences
+
+```bash
+python tts_reader.py --file "example.txt" --output speech.wav --mp3 --split-sentences
+```
+
+#### 📋 List available voices
+
+```bash
+python tts_reader.py --list-voices
 ```
 
 ---
@@ -166,38 +189,20 @@ If no input is provided via `--text`, `--file`, or `--clipboard`, the script pro
 Enter/Paste your text below. Finish input with Ctrl+D (Unix) or Ctrl+Z then Enter (Windows):
 ```
 
-Once input is complete, speech begins (or export starts if `--output` is used).
-
 ---
 
 ## ⌨️ Runtime Controls (Interactive Only)
 
 During live reading (no `--output`):
 
-* Type `p` + Enter → **Pause**
-* Type `r` + Enter → **Resume**
-* Type `q` + Enter → **Quit immediately**
+* `Space` → Pause/Resume
+* `Esc` → Stop immediately
 
-Works across Windows, Linux, and macOS — no elevated permissions required.
-
----
-
-## 🔊 Example Word Indicator Output
-
-```bash
-Starting speech...
-1/5 words: This  
-2/5 words: is  
-3/5 words: some  
-4/5 words: test  
-5/5 words: text.
-```
+No elevated permissions required (keyboard library must be installed for hotkeys).
 
 ---
 
 ## 🔚 Deactivating the Virtual Environment
-
-When you're done:
 
 ```bash
 deactivate
@@ -207,6 +212,5 @@ deactivate
 
 ## 📄 License
 
-Licensed under the **MIT License**.
-See the [LICENSE](LICENSE) file for details.
+MIT License – see [LICENSE](LICENSE) for details.
 

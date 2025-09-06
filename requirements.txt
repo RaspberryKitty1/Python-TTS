@@ -1,3 +1,6 @@
 pyttsx3
-pyperclip
 langdetect
+tqdm
+pyperclip
+keyboard
+pydub
